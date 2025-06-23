@@ -89,6 +89,24 @@ def load_mapping(name: str) -> Dict[str, str]:
     p = MAPPINGS_DIR / f"{slugify(name)}.json"
     return json.loads(p.read_text()) if p.exists() else {}
 
+
+def delete_mapping(name: str) -> None:
+    """Elimina el archivo JSON correspondiente al mapeo."""
+    p = MAPPINGS_DIR / f"{slugify(name)}.json"
+    if p.exists():
+        p.unlink()
+
+
+def clone_mapping(src: str, dest: str) -> None:
+    """Copia un mapeo existente con otro nombre."""
+    src_p = MAPPINGS_DIR / f"{slugify(src)}.json"
+    dest_p = MAPPINGS_DIR / f"{slugify(dest)}.json"
+    if not src_p.exists():
+        raise FileNotFoundError(src)
+    if dest_p.exists():
+        raise FileExistsError(dest)
+    dest_p.write_bytes(src_p.read_bytes())
+
 # ───────────────────────── Texto (flujo simbiu) ──────────────────────
 CODE_RE = re.compile(r"/(?:index/1|VerNoticia)/(\d+)")
 
@@ -242,6 +260,51 @@ def mapping():
         canonicalize=canonicalize,
     )
 
+
+@app.route("/mappings", methods=["GET", "POST"])
+def mappings_admin():
+    """Administración básica de los tipos de planilla."""
+    mappings = list_mappings()
+
+    if request.method == "POST":
+        action = request.form.get("action")
+
+        if action == "create":
+            new_name = request.form.get("new_name", "").strip()
+            if not new_name:
+                flash("Debes indicar un nombre", "danger")
+            elif slugify(new_name) in [slugify(m) for m in mappings]:
+                flash("Ese tipo ya existe", "danger")
+            else:
+                save_mapping(new_name, {})
+                flash("Tipo creado", "success")
+
+        elif action == "clone":
+            src = request.form.get("clone_src", "").strip()
+            dest = request.form.get("clone_dest", "").strip()
+            if not dest:
+                flash("Debes indicar el nombre destino", "danger")
+            else:
+                try:
+                    clone_mapping(src, dest)
+                    flash("Tipo clonado", "success")
+                except FileExistsError:
+                    flash("Ya existe un tipo con ese nombre", "danger")
+                except FileNotFoundError:
+                    flash("Tipo origen no encontrado", "danger")
+
+        elif action == "delete":
+            name = request.form.get("delete_name", "").strip()
+            if name in {"lp", "simbiu"}:
+                flash("No se puede borrar ese tipo", "danger")
+            else:
+                delete_mapping(name)
+                flash("Tipo eliminado", "success")
+
+        return redirect(url_for("mappings_admin"))
+
+    return render_template_string(TPL_MAPPINGS, mappings=mappings)
+
 # ────────────────────────── Plantillas HTML ──────────────────────────
 TPL_HOME = """
 <!doctype html>
@@ -251,6 +314,7 @@ TPL_HOME = """
 
 <div class="container py-5">
   <h1 class="mb-4">Unificador de Hojas Excel</h1>
+  <p><a href="{{ url_for('mappings_admin') }}">Administrar tipos</a></p>
 
   {% with m=get_flashed_messages(with_categories=true) %}
     {% if m %}<div class="alert alert-{{ m[0][0] }}">{{ m[0][1] }}</div>{% endif %}
@@ -290,6 +354,52 @@ function toggleXml(){
 }
 toggleXml();
 </script>
+"""
+
+TPL_MAPPINGS = """
+<!doctype html>
+<title>Administrar tipos</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css">
+
+<div class="container py-4">
+  <a href="{{ url_for('home') }}" class="btn btn-link mb-3">← Menú</a>
+  <h2 class="mb-4">Tipos de planilla</h2>
+
+  {% with m=get_flashed_messages(with_categories=true) %}
+    {% if m %}<div class="alert alert-{{ m[0][0] }}">{{ m[0][1] }}</div>{% endif %}
+  {% endwith %}
+
+  <ul class="list-group mb-4">
+  {% for m in mappings %}
+    <li class="list-group-item">{{ m }}</li>
+  {% endfor %}
+  </ul>
+
+  <form method="POST" class="mb-4">
+    <h5>Crear nuevo tipo</h5>
+    <div class="input-group mb-3">
+      <input class="form-control" name="new_name" placeholder="Nombre" required>
+      <button class="btn btn-success" name="action" value="create">Crear</button>
+    </div>
+
+    <h5>Clonar tipo</h5>
+    <div class="input-group mb-3">
+      <select class="form-select" name="clone_src">
+        {% for m in mappings %}<option value="{{ m }}">{{ m }}</option>{% endfor %}
+      </select>
+      <input class="form-control" name="clone_dest" placeholder="Nuevo nombre" required>
+      <button class="btn btn-primary" name="action" value="clone">Clonar</button>
+    </div>
+
+    <h5>Eliminar tipo</h5>
+    <div class="input-group">
+      <select class="form-select" name="delete_name">
+        {% for m in mappings if m not in ['lp','simbiu'] %}<option value="{{ m }}">{{ m }}</option>{% endfor %}
+      </select>
+      <button class="btn btn-danger" name="action" value="delete">Eliminar</button>
+    </div>
+  </form>
+</div>
 """
 
 TPL_MAPPING = """
