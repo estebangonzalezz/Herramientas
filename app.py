@@ -193,7 +193,7 @@ def home():
     mappings = list_mappings()
 
     if request.method == "POST":
-        mapping_choice = request.form.get("mapping_choice", "lp").strip().lower()
+        mapping_choice = slugify(request.form.get("mapping_choice", "lp"))
         f_xlsx = request.files.get("file_xlsx")
         f_xml = request.files.get("file_xml")
 
@@ -217,7 +217,8 @@ def home():
 
         return redirect(url_for("mapping"))
 
-    return render_template_string(TPL_HOME, mappings=mappings)
+    selected = slugify(request.args.get("mapping", "lp"))
+    return render_template_string(TPL_HOME, mappings=mappings, selected=selected)
 
 
 @app.route("/mapping", methods=["GET", "POST"])
@@ -281,23 +282,27 @@ def mappings_admin():
 
         if action == "create":
             new_name = request.form.get("new_name", "").strip()
-            if not new_name:
+            slug = slugify(new_name)
+            if not slug:
                 flash("Debes indicar un nombre", "danger")
-            elif slugify(new_name) in [slugify(m) for m in mappings]:
+            elif slug in [slugify(m) for m in mappings]:
                 flash("Ese tipo ya existe", "danger")
             else:
-                save_mapping(new_name, {})
+                save_mapping(slug, {})
                 flash("Tipo creado", "success")
+                return redirect(url_for("home", mapping=slug))
 
         elif action == "clone":
-            src = request.form.get("clone_src", "").strip()
+            src = slugify(request.form.get("clone_src", ""))
             dest = request.form.get("clone_dest", "").strip()
-            if not dest:
+            slug = slugify(dest)
+            if not slug:
                 flash("Debes indicar el nombre destino", "danger")
             else:
                 try:
-                    clone_mapping(src, dest)
+                    clone_mapping(src, slug)
                     flash("Tipo clonado", "success")
+                    return redirect(url_for("home", mapping=slug))
                 except FileExistsError:
                     flash("Ya existe un tipo con ese nombre", "danger")
                 except FileNotFoundError:
@@ -336,7 +341,9 @@ TPL_HOME = """
       <label class="form-label">Tipo de planilla</label>
       <select id="mapping_choice" name="mapping_choice"
               class="form-select" onchange="toggleXml()">
-        {% for m in mappings %}<option value="{{ m|lower }}">{{ m }}</option>{% endfor %}
+        {% for m in mappings %}
+        <option value="{{ m|lower }}" {% if m|lower == selected %}selected{% endif %}>{{ m }}</option>
+        {% endfor %}
       </select>
     </div>
 
