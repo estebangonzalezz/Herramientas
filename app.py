@@ -32,6 +32,7 @@ from flask import (
     url_for,
 )
 from flask_session import Session
+from functools import wraps
 
 # ────────────────────── Configuración Flask ──────────────────────────
 app = Flask(__name__)
@@ -184,7 +185,59 @@ def unify_workbook(xlsx_bytes: bytes, mapping: Dict[str, str]) -> pd.DataFrame:
     return df
 
 # ────────────────────────────── Rutas ────────────────────────────────
+
+def login_required(view):
+    """Redirige a /login si el usuario no está autenticado."""
+    @wraps(view)
+    def wrapped(*args, **kwargs):
+        if not session.get("user"):
+            return redirect(url_for("login"))
+        return view(*args, **kwargs)
+
+    return wrapped
+
+
+@app.route("/login", methods=["GET", "POST"])
+def login():
+    error = None
+    if request.method == "POST":
+        user = request.form.get("username")
+        pwd = request.form.get("password")
+        if user == "AnalisisLP" and pwd == "AnalisisLP2025":
+            session["user"] = "AnalisisLP"
+            return redirect(url_for("home"))
+        error = "Credenciales incorrectas"
+    return render_template_string(
+        """
+        <!doctype html>
+        <title>Iniciar sesión</title>
+        <link rel=stylesheet href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css">
+        <div class="container py-5" style="max-width:400px">
+          <h1 class="mb-4">Iniciar sesión</h1>
+          {% if error %}<div class="alert alert-danger">{{ error }}</div>{% endif %}
+          <form method="POST">
+            <div class="mb-3">
+              <label class="form-label">Usuario</label>
+              <input class="form-control" name="username" required>
+            </div>
+            <div class="mb-3">
+              <label class="form-label">Contraseña</label>
+              <input class="form-control" type="password" name="password" required>
+            </div>
+            <button class="btn btn-primary">Entrar</button>
+          </form>
+        </div>
+        """,
+        error=error,
+    )
+
+
+@app.route("/logout")
+def logout():
+    session.pop("user", None)
+    return redirect(url_for("login"))
 @app.route("/", methods=["GET", "POST"])
+@login_required
 def home():
     """
     Menú inicial: seleccionar tipo de planilla, subir Excel (.xlsx)
@@ -222,6 +275,7 @@ def home():
 
 
 @app.route("/mapping", methods=["GET", "POST"])
+@login_required
 def mapping():
     cols_per_sheet = session.get("cols_per_sheet")
     mapping_name = session.get("mapping_name", "lp")
@@ -273,6 +327,7 @@ def mapping():
 
 
 @app.route("/mappings", methods=["GET", "POST"])
+@login_required
 def mappings_admin():
     """Administración básica de los tipos de planilla."""
     mappings = list_mappings()
@@ -330,6 +385,11 @@ TPL_HOME = """
 <div class="container py-5">
   <h1 class="mb-4">Unificador de Hojas Excel</h1>
   <p><a href="{{ url_for('mappings_admin') }}">Administrar tipos</a></p>
+  {% if session.get('user') %}
+    <p><a href="{{ url_for('logout') }}">Cerrar sesión</a></p>
+  {% else %}
+    <p><a href="{{ url_for('login') }}">Iniciar sesión</a></p>
+  {% endif %}
 
   {% with m=get_flashed_messages(with_categories=true) %}
     {% if m %}<div class="alert alert-{{ m[0][0] }}">{{ m[0][1] }}</div>{% endif %}
@@ -381,6 +441,11 @@ TPL_MAPPINGS = """
 <div class="container py-4">
   <a href="{{ url_for('home') }}" class="btn btn-link mb-3">← Menú</a>
   <h2 class="mb-4">Tipos de planilla</h2>
+  {% if session.get('user') %}
+    <p><a href="{{ url_for('logout') }}">Cerrar sesión</a></p>
+  {% else %}
+    <p><a href="{{ url_for('login') }}">Iniciar sesión</a></p>
+  {% endif %}
 
   {% with m=get_flashed_messages(with_categories=true) %}
     {% if m %}<div class="alert alert-{{ m[0][0] }}">{{ m[0][1] }}</div>{% endif %}
@@ -428,6 +493,11 @@ TPL_MAPPING = """
 <div class="container py-4">
   <a href="{{ url_for('home') }}" class="btn btn-link mb-3">← Menú</a>
   <h2 class="mb-4">Configuración: {{ mapping_name }}</h2>
+  {% if session.get('user') %}
+    <p><a href="{{ url_for('logout') }}">Cerrar sesión</a></p>
+  {% else %}
+    <p><a href="{{ url_for('login') }}">Iniciar sesión</a></p>
+  {% endif %}
 
   {% with m=get_flashed_messages(with_categories=true) %}
     {% if m %}<div class="alert alert-{{ m[0][0] }}">{{ m[0][1] }}</div>{% endif %}
