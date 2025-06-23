@@ -229,9 +229,19 @@ def mapping():
         return redirect(url_for("home"))
 
     if request.method == "POST":
-        # Equivalencias capturadas
-        mapping = {k: v.strip() for k, v in request.form.items() if v.strip()}
+        action = request.form.get("action", "unify")
+
+        # Equivalencias capturadas (ignoramos el botón)
+        mapping = {
+            k: v.strip()
+            for k, v in request.form.items()
+            if k != "action" and v.strip()
+        }
         save_mapping(mapping_name, mapping)
+
+        if action == "save":
+            flash("Configuración guardada", "success")
+            return redirect(url_for("mapping"))
 
         # Unificación
         merged = unify_workbook(session["file_xlsx"], mapping)
@@ -412,6 +422,10 @@ TPL_MAPPING = """
   <a href="{{ url_for('home') }}" class="btn btn-link mb-3">← Menú</a>
   <h2 class="mb-4">Configuración: {{ mapping_name }}</h2>
 
+  {% with m=get_flashed_messages(with_categories=true) %}
+    {% if m %}<div class="alert alert-{{ m[0][0] }}">{{ m[0][1] }}</div>{% endif %}
+  {% endwith %}
+
   <form method="POST">
     {% for sheet, cols in cols_per_sheet.items() %}
       <h4 class="mt-4">{{ sheet }}</h4>
@@ -430,7 +444,8 @@ TPL_MAPPING = """
       </table>
     {% endfor %}
     <div class="d-flex gap-3">
-      <button class="btn btn-success">Unificar y descargar</button>
+      <button class="btn btn-primary" name="action" value="save">Guardar configuración</button>
+      <button class="btn btn-success" name="action" value="unify">Unificar y descargar</button>
       <a href="{{ url_for('home') }}" class="btn btn-secondary">Cancelar</a>
     </div>
   </form>
