@@ -288,6 +288,7 @@ def home():
 
         # Guardar en sesión
         session["file_xlsx"] = f_xlsx.read()
+        session["file_xlsx_name"] = Path(f_xlsx.filename).stem
         session["mapping_name"] = mapping_choice
 
         wb = openpyxl.load_workbook(io.BytesIO(session["file_xlsx"]), read_only=True)
@@ -340,11 +341,12 @@ def mapping():
 
         out.seek(0)
 
+        base = session.get("file_xlsx_name", slugify(mapping_name))
         session.clear()  # limpiamos todo
         return send_file(
             out,
             as_attachment=True,
-            download_name=f"unificado_{slugify(mapping_name)}.xlsx",
+            download_name=f"Unificado_{base}.xlsx",
             mimetype="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
         )
 
