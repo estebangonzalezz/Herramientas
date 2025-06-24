@@ -17,7 +17,7 @@ import unicodedata
 import xml.etree.ElementTree as ET
 from datetime import timedelta, datetime
 from pathlib import Path
-from typing import Dict, List
+from typing import Dict, List, Tuple
 from uuid import uuid4
 
 import openpyxl
@@ -209,6 +209,16 @@ def unify_workbook(xlsx_bytes: bytes, mapping: Dict[str, str]) -> pd.DataFrame:
     df = pd.DataFrame(all_rows, columns=headers_final)
     return df
 
+
+def unify_files(files: List[Tuple[str, bytes]], mapping: Dict[str, str]) -> pd.DataFrame:
+    """Une varias planillas y agrega la columna ``archivo_origen``."""
+    merged = []
+    for name, data in files:
+        df = unify_workbook(data, mapping)
+        df["archivo_origen"] = Path(name).stem
+        merged.append(df)
+    return pd.concat(merged, ignore_index=True) if merged else pd.DataFrame()
+
 # ────────────────────────────── Rutas ────────────────────────────────
 
 def login_required(view):
@@ -272,11 +282,11 @@ def home():
 
     if request.method == "POST":
         mapping_choice = slugify(request.form.get("mapping_choice", "lp"))
-        f_xlsx = request.files.get("file_xlsx")
+        files_xlsx = request.files.getlist("file_xlsx")
         f_xml = request.files.get("file_xml")
 
         # Validaciones
-        if not (f_xlsx and f_xlsx.filename.lower().endswith(".xlsx")):
+        if not files_xlsx or any(not f.filename.lower().endswith(".xlsx") for f in files_xlsx):
             flash("Sube un archivo Excel (.xlsx) válido.", "danger")
             return redirect(url_for("home"))
 
@@ -287,11 +297,11 @@ def home():
             session["file_xml"] = f_xml.read()
 
         # Guardar en sesión
-        session["file_xlsx"] = f_xlsx.read()
-        session["file_xlsx_name"] = Path(f_xlsx.filename).stem
+        session["files_xlsx"] = [(f.filename, f.read()) for f in files_xlsx]
+        session["file_xlsx_name"] = Path(files_xlsx[0].filename).stem
         session["mapping_name"] = mapping_choice
 
-        wb = openpyxl.load_workbook(io.BytesIO(session["file_xlsx"]), read_only=True)
+        wb = openpyxl.load_workbook(io.BytesIO(session["files_xlsx"][0][1]), read_only=True)
         session["cols_per_sheet"] = workbook_columns(wb)
 
         return redirect(url_for("mapping"))
@@ -325,7 +335,11 @@ def mapping():
             return redirect(url_for("mapping"))
 
         # Unificación
-        merged = unify_workbook(session["file_xlsx"], mapping)
+        files_xlsx = session.get("files_xlsx", [])
+        if len(files_xlsx) > 1:
+            merged = unify_files(files_xlsx, mapping)
+        else:
+            merged = unify_workbook(files_xlsx[0][1], mapping) if files_xlsx else pd.DataFrame()
 
         # Añadir texto si es Simbiu
         if mapping_name == "simbiu":
@@ -460,7 +474,7 @@ TPL_HOME = """
     <!-- Excel -->
     <div class="mb-3">
       <label class="form-label">Archivo Excel (.xlsx)</label>
-      <input class="form-control" type="file" name="file_xlsx" accept=".xlsx" required>
+      <input class="form-control" type="file" name="file_xlsx" accept=".xlsx" multiple required>
     </div>
 
     <!-- XML (solo Simbiu) -->
