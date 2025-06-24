@@ -15,9 +15,10 @@ import os
 import re
 import unicodedata
 import xml.etree.ElementTree as ET
-from datetime import timedelta
+from datetime import timedelta, datetime
 from pathlib import Path
 from typing import Dict, List
+from uuid import uuid4
 
 import openpyxl
 import pandas as pd
@@ -28,6 +29,7 @@ from flask import (
     render_template_string,
     request,
     send_file,
+    abort,
     session,
     url_for,
 )
@@ -47,6 +49,10 @@ app.permanent_session_lifetime = timedelta(hours=3)
 
 MAPPINGS_DIR = Path("mappings")
 MAPPINGS_DIR.mkdir(exist_ok=True)
+
+PROCESSED_DIR = Path("processed")
+PROCESSED_DIR.mkdir(exist_ok=True, parents=True)
+HISTORY_FILE = PROCESSED_DIR / "history.json"
 
 # ───────────────────────── Utilidades base ───────────────────────────
 def canonicalize(text: str) -> str:
@@ -107,6 +113,25 @@ def clone_mapping(src: str, dest: str) -> None:
     if dest_p.exists():
         raise FileExistsError(dest)
     dest_p.write_bytes(src_p.read_bytes())
+
+
+def load_history() -> List[Dict[str, str]]:
+    if HISTORY_FILE.exists():
+        try:
+            return json.loads(HISTORY_FILE.read_text())
+        except json.JSONDecodeError:
+            return []
+    return []
+
+
+def add_history(mapping: str, filename: str) -> None:
+    records = load_history()
+    records.append({
+        "mapping": mapping,
+        "fecha": datetime.now().isoformat(timespec="seconds"),
+        "archivo": filename,
+    })
+    HISTORY_FILE.write_text(json.dumps(records, ensure_ascii=False, indent=2))
 
 # ───────────────────────── Texto (flujo simbiu) ──────────────────────
 CODE_RE = re.compile(r"/(?:index/1|VerNoticia)/(\d+)")
@@ -309,6 +334,12 @@ def mapping():
         merged.to_excel(out, index=False)
         out.seek(0)
 
+        filename = f"{uuid4().hex}.xlsx"
+        (PROCESSED_DIR / filename).write_bytes(out.getvalue())
+        add_history(mapping_name, filename)
+
+        out.seek(0)
+
         session.clear()  # limpiamos todo
         return send_file(
             out,
@@ -375,6 +406,22 @@ def mappings_admin():
 
     return render_template_string(TPL_MAPPINGS, mappings=mappings)
 
+
+@app.route("/processed/<path:filename>")
+@login_required
+def download_processed(filename: str):
+    p = PROCESSED_DIR / filename
+    if not p.exists():
+        return abort(404)
+    return send_file(p, as_attachment=True, download_name=filename)
+
+
+@app.route("/historial")
+@login_required
+def historial():
+    records = load_history()[::-1]
+    return render_template_string(TPL_HISTORIAL, records=records)
+
 # ────────────────────────── Plantillas HTML ──────────────────────────
 TPL_HOME = """
 <!doctype html>
@@ -385,6 +432,7 @@ TPL_HOME = """
 <div class="container py-5">
   <h1 class="mb-4">Unificador de Hojas Excel</h1>
   <p><a href="{{ url_for('mappings_admin') }}">Administrar tipos</a></p>
+  <p><a href="{{ url_for('historial') }}">Historial de planillas</a></p>
   {% if session.get('user') %}
     <p><a href="{{ url_for('logout') }}">Cerrar sesión</a></p>
   {% else %}
@@ -526,6 +574,29 @@ TPL_MAPPING = """
       <a href="{{ url_for('home') }}" class="btn btn-secondary">Cancelar</a>
     </div>
   </form>
+</div>
+"""
+
+TPL_HISTORIAL = """
+<!doctype html>
+<title>Historial de planillas</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css">
+
+<div class="container py-4">
+  <a href="{{ url_for('home') }}" class="btn btn-link mb-3">← Menú</a>
+  <h2 class="mb-4">Historial de planillas</h2>
+  <table class="table table-bordered">
+    <thead><tr><th>Fecha</th><th>Tipo</th><th>Archivo</th></tr></thead>
+    <tbody>
+    {% for r in records %}
+      <tr>
+        <td>{{ r.fecha }}</td>
+        <td>{{ r.mapping }}</td>
+        <td><a href="{{ url_for('download_processed', filename=r.archivo) }}">Descargar</a></td>
+      </tr>
+    {% endfor %}
+    </tbody>
+  </table>
 </div>
 """
 
