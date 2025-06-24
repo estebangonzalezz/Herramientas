@@ -178,32 +178,34 @@ def unify_workbook(xlsx_bytes: bytes, mapping: Dict[str, str]) -> pd.DataFrame:
     Une todas las hojas del Excel normalizando encabezados.
     Devuelve DataFrame; los hipervínculos quedan como texto visible.
     """
-    wb_in = openpyxl.load_workbook(io.BytesIO(xlsx_bytes), data_only=False)
+    wb_in = openpyxl.load_workbook(
+        io.BytesIO(xlsx_bytes), read_only=True, data_only=False
+    )
     all_rows: List[List] = []
     headers_final: List[str] = []
 
     # ---- determinar encabezados finales --------------------------------
     for ws in wb_in.worksheets:
-        for cell in next(ws.iter_rows(max_row=1)):
-            orig = cell.value or ""
+        for orig in next(ws.iter_rows(max_row=1, values_only=True)):
+            orig = orig or ""
             dest = mapping.get(orig, mapping.get(canonicalize(orig), canonicalize(orig)))
             if dest not in headers_final:
                 headers_final.append(dest)
 
     # ---- recorrer filas y re-mapear ------------------------------------
     for ws in wb_in.worksheets:
-        header_src = [c.value or "" for c in next(ws.iter_rows(max_row=1))]
+        header_src = [c or "" for c in next(ws.iter_rows(max_row=1, values_only=True))]
         idx2dest = {
             idx: mapping.get(orig, mapping.get(canonicalize(orig), canonicalize(orig)))
             for idx, orig in enumerate(header_src)
         }
-        for row in ws.iter_rows(min_row=2):
+        for row in ws.iter_rows(min_row=2, values_only=True):
             new_row = [""] * len(headers_final)
-            for idx, cell in enumerate(row):
+            for idx, value in enumerate(row):
                 dest = idx2dest.get(idx)
                 if not dest:
                     continue
-                new_row[headers_final.index(dest)] = cell.value
+                new_row[headers_final.index(dest)] = value
             all_rows.append(new_row)
 
     df = pd.DataFrame(all_rows, columns=headers_final)
