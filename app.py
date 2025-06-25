@@ -19,6 +19,7 @@ from datetime import timedelta, datetime
 from pathlib import Path
 from typing import Dict, List, Tuple
 from uuid import uuid4
+from zipfile import BadZipFile
 
 import openpyxl
 import pandas as pd
@@ -343,35 +344,44 @@ def mapping():
             flash("Configuración guardada", "success")
             return redirect(url_for("mapping"))
 
-        # Unificación
-        files_xlsx = session.get("files_xlsx", [])
-        if len(files_xlsx) > 1:
-            merged = unify_files(files_xlsx, mapping)
-        else:
-            merged = unify_workbook(files_xlsx[0][1], mapping) if files_xlsx else pd.DataFrame()
+        try:
+            # Unificación
+            files_xlsx = session.get("files_xlsx", [])
+            if len(files_xlsx) > 1:
+                merged = unify_files(files_xlsx, mapping)
+            else:
+                merged = (
+                    unify_workbook(files_xlsx[0][1], mapping)
+                    if files_xlsx
+                    else pd.DataFrame()
+                )
 
-        # Añadir texto si es Simbiu
-        if mapping_name == "simbiu":
-            merged = add_text_column(merged, session.get("file_xml", b""))
+            # Añadir texto si es Simbiu
+            if mapping_name == "simbiu":
+                merged = add_text_column(merged, session.get("file_xml", b""))
 
-        out = io.BytesIO()
-        merged.to_excel(out, index=False)
-        out.seek(0)
+            out = io.BytesIO()
+            merged.to_excel(out, index=False)
+            out.seek(0)
 
-        filename = f"{uuid4().hex}.xlsx"
-        (PROCESSED_DIR / filename).write_bytes(out.getvalue())
-        add_history(mapping_name, filename)
+            filename = f"{uuid4().hex}.xlsx"
+            (PROCESSED_DIR / filename).write_bytes(out.getvalue())
+            add_history(mapping_name, filename)
 
-        out.seek(0)
+            out.seek(0)
 
-        base = session.get("file_xlsx_name", slugify(mapping_name))
-        session.clear()  # limpiamos todo
-        return send_file(
-            out,
-            as_attachment=True,
-            download_name=f"Unificado_{base}.xlsx",
-            mimetype="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-        )
+            base = session.get("file_xlsx_name", slugify(mapping_name))
+            session.clear()  # limpiamos todo
+            return send_file(
+                out,
+                as_attachment=True,
+                download_name=f"Unificado_{base}.xlsx",
+                mimetype="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            )
+        except (BadZipFile, ValueError, Exception):
+            flash("Ocurrió un error al procesar los archivos", "danger")
+            app.logger.exception("Error al unificar archivos")
+            return redirect(url_for("mapping"))
 
     return render_template_string(
         TPL_MAPPING,
