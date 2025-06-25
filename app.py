@@ -42,7 +42,7 @@ app.secret_key = os.getenv("FLASK_SECRET", "cambia_esta_clave_supersecreta")
 
 app.config["SESSION_TYPE"] = "filesystem"
 app.config["SESSION_FILE_DIR"] = Path("flask_session").resolve()
-app.config["SESSION_PERMANENT"] = False
+app.config["SESSION_PERMANENT"] = True
 Session(app)
 
 app.permanent_session_lifetime = timedelta(hours=3)
@@ -247,6 +247,7 @@ def login():
         user = request.form.get("username")
         pwd = request.form.get("password")
         if user == "AnalisisLP" and pwd == "AnalisisLP2025":
+            session.permanent = True
             session["user"] = "AnalisisLP"
             return redirect(url_for("home"))
         error = "Credenciales incorrectas"
