@@ -176,7 +176,7 @@ def add_text_column(df: pd.DataFrame, xml_bytes: bytes) -> pd.DataFrame:
 def unify_workbook(xlsx_bytes: bytes, mapping: Dict[str, str]) -> pd.DataFrame:
     """
     Une todas las hojas del Excel normalizando encabezados.
-    Devuelve DataFrame; los hipervínculos quedan como texto visible.
+    Devuelve DataFrame manteniendo los hipervínculos activos.
     """
     wb_in = openpyxl.load_workbook(
         io.BytesIO(xlsx_bytes), read_only=True, data_only=False
@@ -199,12 +199,18 @@ def unify_workbook(xlsx_bytes: bytes, mapping: Dict[str, str]) -> pd.DataFrame:
             idx: mapping.get(orig, mapping.get(canonicalize(orig), canonicalize(orig)))
             for idx, orig in enumerate(header_src)
         }
-        for row in ws.iter_rows(min_row=2, values_only=True):
+        for row in ws.iter_rows(min_row=2, values_only=False):
             new_row = [""] * len(headers_final)
-            for idx, value in enumerate(row):
+            for idx, cell in enumerate(row):
                 dest = idx2dest.get(idx)
                 if not dest:
                     continue
+                if cell.hyperlink:
+                    value = f'=HYPERLINK("{cell.hyperlink.target}", "{cell.value}")'
+                elif isinstance(cell.value, str) and re.match(r"https?://", cell.value):
+                    value = f'=HYPERLINK("{cell.value}", "{cell.value}")'
+                else:
+                    value = cell.value
                 new_row[headers_final.index(dest)] = value
             all_rows.append(new_row)
 
