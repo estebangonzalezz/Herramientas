@@ -206,8 +206,9 @@ def unify_workbook(xlsx_bytes: bytes, mapping: Dict[str, str]) -> pd.DataFrame:
                 dest = idx2dest.get(idx)
                 if not dest:
                     continue
-                if cell.hyperlink:
-                    value = f'=HYPERLINK("{cell.hyperlink.target}", "{cell.value}")'
+                link = getattr(cell, "hyperlink", None)
+                if link:
+                    value = f'=HYPERLINK("{link.target}", "{cell.value}")'
                 elif isinstance(cell.value, str) and re.match(r"https?://", cell.value):
                     value = f'=HYPERLINK("{cell.value}", "{cell.value}")'
                 else:
