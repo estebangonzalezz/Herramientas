@@ -270,7 +270,7 @@ def login():
               <label class="form-label">Contraseña</label>
               <input class="form-control" type="password" name="password" required>
             </div>
-            <button class="btn btn-primary">Entrar</button>
+            <button class="btn btn-primary" style="width:200px">Entrar</button>
           </form>
         </div>
         """,
@@ -503,7 +503,7 @@ TPL_HOME = """
       <input class="form-control" type="file" name="file_xml" accept=".xml">
     </div>
 
-    <button class="btn btn-primary">Continuar</button>
+    <button class="btn btn-primary" style="width:200px">Continuar</button>
   </form>
 </div>
 
@@ -545,7 +545,7 @@ TPL_MAPPINGS = """
     <h5>Crear nuevo tipo</h5>
     <div class="input-group mb-3">
       <input class="form-control" name="new_name" placeholder="Nombre" required>
-      <button class="btn btn-success" name="action" value="create">Crear</button>
+      <button class="btn btn-success" name="action" value="create" style="width:200px">Crear</button>
     </div>
 
     <h5>Clonar tipo</h5>
@@ -554,7 +554,7 @@ TPL_MAPPINGS = """
         {% for m in mappings %}<option value="{{ m }}">{{ m }}</option>{% endfor %}
       </select>
       <input class="form-control" name="clone_dest" placeholder="Nuevo nombre" required>
-      <button class="btn btn-primary" name="action" value="clone">Clonar</button>
+      <button class="btn btn-primary" name="action" value="clone" style="width:200px">Clonar</button>
     </div>
 
     <h5>Eliminar tipo</h5>
@@ -562,7 +562,7 @@ TPL_MAPPINGS = """
       <select class="form-select" name="delete_name">
         {% for m in mappings if m not in ['lp','simbiu'] %}<option value="{{ m }}">{{ m }}</option>{% endfor %}
       </select>
-      <button class="btn btn-danger" name="action" value="delete">Eliminar</button>
+      <button class="btn btn-danger" name="action" value="delete" style="width:200px">Eliminar</button>
     </div>
   </form>
 </div>
@@ -605,9 +605,9 @@ TPL_MAPPING = """
       </table>
     {% endfor %}
     <div class="d-flex gap-3">
-      <button class="btn btn-primary" name="action" value="save">Guardar configuración</button>
-      <button class="btn btn-success" name="action" value="unify">Unificar y descargar</button>
-      <a href="{{ url_for('home') }}" class="btn btn-secondary">Cancelar</a>
+      <button class="btn btn-primary" name="action" value="save" style="width:200px">Guardar configuración</button>
+      <button class="btn btn-success" name="action" value="unify" style="width:200px">Unificar y descargar</button>
+      <a href="{{ url_for('home') }}" class="btn btn-secondary" style="width:200px">Cancelar</a>
     </div>
   </form>
 </div>
