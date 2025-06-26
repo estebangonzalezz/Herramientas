@@ -337,8 +337,16 @@ def mapping():
                 download_name=f"Unificado_{base}.xlsx",
                 mimetype="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
             )
-        except (BadZipFile, ValueError, Exception):
-            flash("Ocurrió un error al procesar los archivos", "danger")
+        except BadZipFile:
+            flash("El archivo Excel parece estar dañado o no es válido.", "danger")
+            app.logger.exception("Error al unificar archivos")
+            return redirect(url_for("mapping"))
+        except ValueError as exc:
+            flash(f"Error de datos: {exc}", "danger")
+            app.logger.exception("Error al unificar archivos")
+            return redirect(url_for("mapping"))
+        except Exception:
+            flash("Ocurrió un error inesperado al procesar los archivos.", "danger")
             app.logger.exception("Error al unificar archivos")
             return redirect(url_for("mapping"))
 
